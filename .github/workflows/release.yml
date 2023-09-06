@@ -13,4 +13,4 @@ jobs:
           targets: x86_64-pc-windows-gnu
       - run: sudo apt -y install mingw-w64 
       - run: cargo build --release
-      - run: ls target/release
+      - run: ls target/release/build
