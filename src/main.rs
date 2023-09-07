@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate clap;
 use std::{
     env,
     fs::{self, metadata},
@@ -5,11 +7,15 @@ use std::{
 };
 
 use clap::Parser;
+use cli::Cli;
+use log::{debug, error, info, log_enabled, warn};
+
+mod cli;
 
 fn run_git_fetch() {
     let output = run_command(Command::new("git").arg("fetch"));
     if !output.status.success() {
-        println!("Error fetching repository");
+        error!("Error while fetching repository");
     }
 }
 
@@ -28,7 +34,7 @@ fn check_git_branch(branch: String) -> bool {
     };
 
     if !exists {
-        println!("[WARN] Branch {} does not exist", branch);
+        warn!("Branch {} does not exist", branch);
     }
 
     return exists;
@@ -42,8 +48,8 @@ fn run_command(command: &mut Command) -> Output {
         .map(|arg| arg.to_str().unwrap().to_string())
         .collect::<Vec<String>>()
         .join(" ");
-    println!("[DEBUG] Running: \"{} {}\"", program, args);
-    return command
+    debug!("Running: \"{} {}\"", program, args);
+    let c = command
         .stdin(Stdio::piped())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
@@ -54,14 +60,39 @@ fn run_command(command: &mut Command) -> Output {
             "error getting output for \"{} {}\"",
             program, args
         ));
+
+    if log_enabled!(log::Level::Debug) {
+        let stdout = c.stdout.clone();
+
+        let output = String::from_utf8(stdout).expect("Error getting output");
+        if !output.is_empty() {
+            debug!("Output from \"{} {}\" is: \n{}", program, args, output);
+        } else {
+            debug!("No output from \"{} {}\"", program, args);
+        }
+        if !c.status.success() {
+            let stderr = c.stderr.clone();
+            let error = String::from_utf8(stderr).expect("error getting error message");
+            if error.is_empty() {
+                debug!("No error message from \"{} {}\"", program, args);
+            } else {
+                debug!("Error from \"{} {}\" is: \n{}", program, args, error);
+            }
+        }
+    }
+
+    return c;
 }
 
 fn run_git_status(folder_to_check: String, source_branch: String, target_branch: String) {
     match env::set_current_dir(folder_to_check.to_string()) {
         Ok(_) => {}
-        _ => eprintln!("[ERROR] Going to directory {}", folder_to_check),
+        _ => {
+            error!("Directory not found {}", folder_to_check);
+            return;
+        }
     }
-    println!("[INFO] Checking folder {}", folder_to_check);
+    info!("Checking folder {}", folder_to_check);
     run_git_fetch();
 
     if !check_git_branch(source_branch.to_string()) || !check_git_branch(target_branch.to_string())
@@ -77,35 +108,36 @@ fn run_git_status(folder_to_check: String, source_branch: String, target_branch:
     if output.status.success() {
         let raw_output = String::from_utf8(output.stdout).expect("error getting output");
         if !raw_output.is_empty() {
-            println!(
-                "[INFO] There are differences. You need to make a merge on {}",
+            info!(
+                "[Merge=yes] There are differences. You need to make a merge on {}",
                 folder_to_check.to_string()
             );
         } else {
-            println!("[INFO] There are no differences.");
+            info!(
+                "[Merge=no] There are no differences on {}",
+                folder_to_check.to_string()
+            );
         }
     } else {
         let err = String::from_utf8(output.stderr);
         let err_str = err.expect("Error getting error");
         if err_str.contains("not a git repository") {
-            println!(
-                "[WARN] folder {} is not a git repository",
+            warn!(
+                "folder {} is not a git repository.",
                 folder_to_check.to_string()
             );
-        } else if err_str.contains("unknown revision or path not in the working tree") {
-            eprintln!("[ERROR] Invalid branch for {}", folder_to_check);
         } else {
-            eprintln!("[ERROR] Unknown error");
-            eprintln!("err: {}", err_str);
+            error!("Error checking diffs: {}", err_str);
         }
     }
 }
 
 fn get_projects_folders(path: String) -> Vec<String> {
+    debug!("Getting projects folder");
     let projects_folder = match fs::read_dir(path.to_string()) {
         Ok(folder) => folder,
         _ => {
-            eprintln!("[ERROR] Reading directory {}", path.to_string());
+            error!("Can't read directory {}", path.to_string());
             exit(-1);
         }
     };
@@ -118,34 +150,16 @@ fn get_projects_folders(path: String) -> Vec<String> {
     return list_response;
 }
 
-#[derive(Parser)]
-struct Cli {
-    #[arg(value_name = "projects-folder", help = "folder with projects to check")]
-    projects_folder: String,
-
-    #[arg(
-        short,
-        long,
-        value_name = "source branch",
-        help = "source branch to check (it must be a remote branch)"
-    )]
-    source_branch: String,
-
-    #[arg(
-        short,
-        long,
-        value_name = "target branch",
-        default_value = "origin/main",
-        help = "target branch to check (it must be a remote branch)"
-    )]
-    target_branch: String,
-
-    #[arg(long)]
-    debug: bool,
-}
-
 fn main() {
     let cli: Cli = Cli::parse();
+
+    if env::var("RUST_LOG").is_err() {
+        let level = if cli.debug { "debug" } else { "info" };
+        env::set_var("RUST_LOG", level);
+    }
+
+    env_logger::init();
+    cli.clone().log();
 
     let projects_dir = cli.projects_folder;
     let source_branch = cli.source_branch;
@@ -155,9 +169,16 @@ fn main() {
     projects_folders
         .into_iter()
         .map(|pf| format!("{}/{}", projects_dir.to_string(), pf))
-        .filter(|pf| match metadata(pf) {
-            Ok(md) => md.is_dir(),
-            _ => false,
-        })
+        .filter(|pf| filter_folders(pf.to_string()))
         .for_each(|pf| run_git_status(pf, source_branch.to_string(), target_branch.to_string()));
+}
+
+fn filter_folders(project_folder: String) -> bool {
+    match metadata(project_folder.to_string()) {
+        Ok(md) => md.is_dir(),
+        Err(err) => {
+            error!("Error checking if {} is a folder: {}", project_folder, err);
+            false
+        }
+    }
 }
