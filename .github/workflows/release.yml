@@ -14,8 +14,8 @@ jobs:
         with:
           targets: x86_64-pc-windows-gnu
       - run: sudo apt -y install mingw-w64 
-      - run: cargo build --release
-      - run: cargo build --release --target=x86_64-pc-windows-gnu
+      - run: cargo build --release &&  md5sum target/release/rust-git-diff
+      - run: cargo build --release --target=x86_64-pc-windows-gnu && md5sum target/x86_64-pc-windows-gnu/release/rust-git-diff.exe
       - uses: ncipollo/release-action@v1 
         with:
           artifacts: "target/release/rust-git-diff,target/x86_64-pc-windows-gnu/release/rust-git-diff.exe"
