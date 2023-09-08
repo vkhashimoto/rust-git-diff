@@ -20,4 +20,5 @@ jobs:
         with:
           artifacts: "target/release/rust-git-diff,target/x86_64-pc-windows-gnu/release/rust-git-diff.exe"
           prerelease: true
-          tag: actions-test
+          commit: $GITHUB_SHA
+            #tag: actions-test
