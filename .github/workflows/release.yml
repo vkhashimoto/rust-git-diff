@@ -19,6 +19,8 @@ jobs:
       - name: Get short SHA
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      - name: Echo sha_short
+        run: echo ${{ steps.vars.output.sha_short }}
       - uses: ncipollo/release-action@v1 
         with:
           artifacts: "target/release/rust-git-diff,target/x86_64-pc-windows-gnu/release/rust-git-diff.exe"
