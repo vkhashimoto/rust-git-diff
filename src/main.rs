@@ -154,7 +154,13 @@ fn main() {
     let cli: Cli = Cli::parse();
 
     if env::var("RUST_LOG").is_err() {
-        let level = if cli.debug { "debug" } else { "info" };
+        let level = if cli.debug {
+            "debug"
+        } else if cli.merges {
+            "info/Merge"
+        } else {
+            "info"
+        };
         env::set_var("RUST_LOG", level);
     }
 

@@ -25,6 +25,9 @@ pub struct Cli {
 
     #[arg(long)]
     pub debug: bool,
+
+    #[arg(short, help = "Show only messages about merges")]
+    pub merges: bool,
 }
 
 impl Cli {
