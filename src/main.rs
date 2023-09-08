@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate clap;
+extern crate serde;
 use std::{
     env,
     fs::{self, metadata},
@@ -8,9 +9,12 @@ use std::{
 
 use clap::Parser;
 use cli::Cli;
+use config::Config;
 use log::{debug, error, info, log_enabled, warn};
+use toml::de::Error;
 
 mod cli;
+mod config;
 
 fn run_git_fetch() {
     let output = run_command(Command::new("git").arg("fetch"));
@@ -84,7 +88,10 @@ fn run_command(command: &mut Command) -> Output {
     return c;
 }
 
-fn run_git_status(folder_to_check: String, source_branch: String, target_branch: String) {
+fn run_git_status(project_to_check: ProjectToCheck) {
+    let folder_to_check = project_to_check.full_path;
+    let source_branch = project_to_check.source_branch;
+    let target_branch = project_to_check.target_branch;
     match env::set_current_dir(folder_to_check.to_string()) {
         Ok(_) => {}
         _ => {
@@ -150,33 +157,81 @@ fn get_projects_folders(path: String) -> Vec<String> {
     return list_response;
 }
 
+#[derive(Clone)]
+struct ProjectToCheck {
+    full_path: String,
+    source_branch: String,
+    target_branch: String,
+}
+
 fn main() {
-    let cli: Cli = Cli::parse();
+    let contents: std::io::Result<String> = fs::read_to_string("config.toml");
+    let config: Result<Config, Error> = toml::from_str(&contents.unwrap_or("".to_string()));
+
+    let cli: Option<Cli> = match config {
+        Ok(_) => None,
+        Err(_) => Some(Cli::parse()),
+    };
 
     if env::var("RUST_LOG").is_err() {
-        let level = if cli.debug {
-            "debug"
-        } else if cli.merges {
-            "info/Merge"
+        let level = if config.is_err() {
+            if cli.clone().unwrap().debug {
+                "debug"
+            } else if cli.clone().unwrap().merges {
+                "info/Merge"
+            } else {
+                "info"
+            }
         } else {
-            "info"
+            if config.clone().unwrap().debug.unwrap_or(false) {
+                "debug"
+            } else if config.clone().unwrap().merges.unwrap_or(false) {
+                "info/Merge"
+            } else {
+                "info"
+            }
         };
         env::set_var("RUST_LOG", level);
     }
 
     env_logger::init();
-    cli.clone().log();
+    if cli.is_some() {
+        cli.clone().unwrap().log();
+    }
 
-    let projects_dir = cli.projects_folder;
-    let source_branch = cli.source_branch;
-    let target_branch = cli.target_branch;
+    match config {
+        Ok(conf) => get_project_to_check_from_config(conf.clone()),
+        _ => get_project_to_check_from_cli(cli.clone().unwrap()),
+    }
+    .iter()
+    .for_each(|ptc| run_git_status(ptc.clone()));
+}
 
-    let projects_folders = get_projects_folders(projects_dir.to_string());
-    projects_folders
-        .into_iter()
-        .map(|pf| format!("{}/{}", projects_dir.to_string(), pf))
+fn get_project_to_check_from_config(config: Config) -> Vec<ProjectToCheck> {
+    config
+        .projects
+        .iter()
+        .map(|p| ProjectToCheck {
+            target_branch: p.target_branch.to_string(),
+            source_branch: p.source_branch.to_string(),
+            full_path: format!("{}/{}", config.projects_folder, p.project_folder),
+        })
+        .collect()
+}
+
+fn get_project_to_check_from_cli(cli: Cli) -> Vec<ProjectToCheck> {
+    let projects_folder = get_projects_folders(cli.projects_folder.to_string());
+
+    projects_folder
+        .iter()
+        .map(|pf| format!("{}/{}", cli.projects_folder, pf))
         .filter(|pf| filter_folders(pf.to_string()))
-        .for_each(|pf| run_git_status(pf, source_branch.to_string(), target_branch.to_string()));
+        .map(|pf| ProjectToCheck {
+            full_path: pf,
+            source_branch: cli.source_branch.to_string(),
+            target_branch: cli.target_branch.to_string(),
+        })
+        .collect()
 }
 
 fn filter_folders(project_folder: String) -> bool {
