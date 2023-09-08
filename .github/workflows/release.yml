@@ -24,6 +24,6 @@ jobs:
         with:
           artifacts: "target/release/rust-git-diff,target/x86_64-pc-windows-gnu/release/rust-git-diff.exe"
           prerelease: true
-          commit: $GITHUB_SHA
-          tag: ${ SHORT_SHA }
+            #commit: $GITHUB_SHA
+          tag: ${{ SHORT_SHA }}
 
