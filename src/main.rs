@@ -101,9 +101,10 @@ fn run_git_status(folder_to_check: String, source_branch: String, target_branch:
     }
     let output = run_command(
         Command::new("git")
-            .arg("diff")
+            .arg("log")
+            .arg("--no-merges")
             .arg(source_branch)
-            .arg(target_branch),
+            .arg(format!("^{}", target_branch)),
     );
     if output.status.success() {
         let raw_output = String::from_utf8(output.stdout).expect("error getting output");
