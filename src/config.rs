@@ -2,15 +2,15 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Clone)]
 pub struct Config {
-    pub projects_folder: String,
     pub projects: Vec<Project>,
-    pub merges: Option<bool>,
-    pub debug: Option<bool>,
+    pub log_level: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]
 pub struct Project {
-    pub project_folder: String,
+    pub name: String,
+    pub folder: String,
+    pub remote_name: Option<String>, // defaults to origin
     pub source_branch: String,
-    pub target_branch: String,
+    pub target_branch: Option<String>, // defaults to main
 }

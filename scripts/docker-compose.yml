@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+  git_server:
+    image: git-server
+    build: 
+      context: .
+      dockerfile: ./Dockerfile.gits
+    networks:
+      - git-net
+  app_test:
+    depends_on:
+      - git_server
+    image: git-client
+    build: 
+      context: ..
+      dockerfile: scripts/Dockerfile.app
+    networks:
+      - git-net
+
+networks:
+  git-net:

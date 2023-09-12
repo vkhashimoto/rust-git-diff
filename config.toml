@@ -1,14 +1,17 @@
-projects_folder = '<full-path-to-projects-folder>'
-debug = true
-merges = false
+log_level = "info"
 
 [[projects]]
-project_folder = '<project-folder-1>'
-source_branch = '<source-branch-project-1>'
-target_branch = '<target-branch-project-1>'
+name = 'git-without-diff'
+folder = '/tmp/git-without-diff'
+source_branch = 'featureA'
 
 [[projects]]
-project_folder = '<project-folder-2>'
-source_branch = '<source-branch-project-2>'
-target_branch = '<target-branch-project-2>'
+name = 'git-with-diff'
+folder = '/tmp/git-with-diff'
+source_branch = 'featureA'
 
+[[projects]]
+name = 'git-with-diff-on-merge'
+folder = '/tmp/git-with-diff-on-merge'
+source_branch = 'featureA'
+remote_name = 'upstream'

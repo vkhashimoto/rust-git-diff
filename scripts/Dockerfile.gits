@@ -1,0 +1,36 @@
+FROM alpine:latest
+
+RUN apk upgrade && apk update
+RUN apk add openssh-server openrc git
+
+
+RUN echo "AllowUsers git" >> /etc/ssh/sshd_config
+RUN sed -ie "s/#PasswordAuthentication yes/PasswordAuthentication no/g" /etc/ssh/sshd_config
+RUN adduser -D git
+RUN ssh-keygen -A
+RUN chown git /etc/ssh/ssh_host_*
+RUN touch /run/sshd.pid && chown git /run/sshd.pid
+
+USER git
+WORKDIR /home/git
+RUN mkdir .ssh
+
+# git folder without diff
+RUN mkdir /tmp/git-without-diff.git
+WORKDIR /tmp/git-without-diff.git
+RUN git init --bare
+
+
+# git folder with diff
+RUN mkdir /tmp/git-with-diff.git
+WORKDIR /tmp/git-with-diff.git
+RUN git init --bare
+
+# git folder with diff on merge commit
+RUN mkdir /tmp/git-with-diff-on-merge.git
+WORKDIR /tmp/git-with-diff-on-merge.git
+RUN git init --bare
+
+COPY .ssh/id_rsa.pub /home/git/.ssh/authorized_keys
+
+ENTRYPOINT ["sh", "-c", "exec /usr/sbin/sshd -D -e"]
